@@ -1,14 +1,21 @@
 from io import BytesIO
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
 import streamlit as st
 from audiorecorder import audiorecorder  # type: ignore
 from dotenv import dotenv_values
-from openai import OpenAI
 from hashlib import md5
+from openai import OpenAI
+from qdrant_client import QdrantClient
+from qdrant_client.models import PointStruct, Distance, VectorParams
 
 
 env = dotenv_values(".env")
+## Secrets using Streamlit Cloud Mechanism
+# https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management
+# if 'QDRANT_URL' in st.secrets:
+#     env['QDRANT_URL'] = st.secrets['QDRANT_URL']
+# if 'QDRANT_API_KEY' in st.secrets:
+#     env['QDRANT_API_KEY'] = st.secrets['QDRANT_API_KEY']
+###
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 
@@ -42,7 +49,10 @@ def transcribe_audio(audio_bytes):
 
 @st.cache_resource
 def get_qdrant_client():
-    return QdrantClient(path=":memory:")
+    return QdrantClient(
+    url=env["QDRANT_URL"],
+    api_key=env["QDRANT_API_KEY"],
+)
 
 
 def assure_db_collection_exists():
@@ -173,6 +183,10 @@ with add_tab:
         start_prompt="Nagraj notatkę",
         stop_prompt="Zatrzymaj nagrywanie",
     )
+    
+    if note_audio is None or len(note_audio) == 0:
+        st.stop()
+
     if note_audio:
         audio = BytesIO()
         note_audio.export(audio, format="mp3")
@@ -201,6 +215,8 @@ with add_tab:
         if st.session_state["note_text"] and st.button(
             "Zapisz notatkę do bazy danych", disabled=not st.session_state["note_text"]
         ):
+            qdrant_client = get_qdrant_client()
+            # assure_db_collection_exists()
             add_note_to_db(note_text=st.session_state["note_text"])
             st.toast("Notatka została zapisana do bazy danych!", icon="🎉")
 
